@@ -50,11 +50,11 @@
 // First Header Group.
 // ===========================================================================
 
-#include "gdf_io_base.h"
-#include "gdf_record.h"
-#include "gdf_context.h"
-#include "gdf_file.h"
-#include "gdf_write.h"
-#include "gdf_read.h"
+#include <dev/gdf_io/gdf_io_base.h>
+#include <dev/gdf_io/gdf_record.h>
+#include <dev/gdf_io/gdf_context.h>
+#include <dev/gdf_io/gdf_file.h>
+#include <dev/gdf_io/gdf_write.h>
+#include <dev/gdf_io/gdf_read.h>
 
 #endif // GDF_TOOLS_SRC_GDF_IO_H_

@@ -63,8 +63,8 @@ typedef Tag<Gdf_> Gdf;
 // Global Values
 // ----------------------------------------------------------------------------
 
-static const char GDF_VERSION_MAJOR '0'
-static const char GDF_VERSION_MINOR '1'
+static const char GDF_VERSION_MAJOR = '0';
+static const char GDF_VERSION_MINOR = '1';
 
 // ----------------------------------------------------------------------------
 // Class GdfIO

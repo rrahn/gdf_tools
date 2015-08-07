@@ -46,6 +46,8 @@
 #include <seqan/parallel.h>
 #include <seqan/seq_io.h>
 
+#include <dev/gdf_io.h>
+
 namespace seqan
 {
 

@@ -9,8 +9,10 @@
 project (seqan)
 cmake_minimum_required (VERSION 2.8.2)
 set (CMAKE_INCLUDE_PATH
-${CMAKE_CURRENT_SOURCE_DIR}/include/seqan/include
-${CMAKE_INCLUDE_PATH})
+${CMAKE_CURRENT_SOURCE_DIR}/include/seqan/include 
+${CMAKE_CURRENT_SOURCE_DIR}/include/dev
+${CMAKE_INCLUDE_PATH}
+)
 set (CMAKE_MODULE_PATH
 ${CMAKE_CURRENT_SOURCE_DIR}/include/seqan/util/cmake/FindTBB
 ${CMAKE_CURRENT_SOURCE_DIR}/include/seqan/util/cmake
