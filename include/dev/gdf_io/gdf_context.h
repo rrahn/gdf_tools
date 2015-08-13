@@ -34,8 +34,8 @@
 // Implements the header for the journal sequence file formats.
 // ==========================================================================
 
-#ifndef INCLUDE_SEQAN_JOURNALED_STRING_TREE_DELTA_MAP_IO_HEADER_H_
-#define INCLUDE_SEQAN_JOURNALED_STRING_TREE_DELTA_MAP_IO_HEADER_H_
+#ifndef INCLUDE_DEV_GDF_IO_GDF_CONTEXT_H_
+#define INCLUDE_DEV_GDF_IO_GDF_CONTEXT_H_
 
 namespace seqan
 {
@@ -59,16 +59,21 @@ typedef TagList<SnpCompStrategy2BitEncoding,
 
 typedef TagSelector<SnpCompStrategies> SnpCompStrategieSelector;
 
+/*!
+ * @class GdfIOCompressionContext
+ * @headerfile <dev/gdf_io.h>
+ * @brief The I/O context to use for GDF I/O.
+ */
 
 struct GdfIOCompressionContext
 {
     CharString                refID;
-    CharString                refURI;
+    CharString                refUri;
     SnpCompStrategieSelector  snpCompStrategy;
 
-    GdfIOCompressionContext
+    GdfIOCompressionContext()
     {
-        assign(snpCompStrategy, SnpCompStrategyRaw);
+        assign(snpCompStrategy, SnpCompStrategyRaw());
     }
 
 };
@@ -76,6 +81,29 @@ struct GdfIOCompressionContext
 // ----------------------------------------------------------------------------
 // Class GdfIOContext
 // ----------------------------------------------------------------------------
+
+/*!
+ * @class GdfIOContext
+ * @headerfile <dev/gdf_io.h>
+ * @brief The I/O context to use for GDF I/O.
+ * @implements GdfIOCompressionContext
+ *
+ * @signature template <typename TNameStore[, typename TNameStoreCache]>
+ *            class GdfIOContext : public GdfIOCompressionContext;
+ *
+ * @tparam TNameStore      The type used to represent the names.
+ * @tparam TNameStoreCache The type used to cache the names. Defaults to @link NameStoreCache @endlink &lt;TNameStore&gtl;.
+ */
+
+/*!
+ * @fn GdfIOContext::GdfIOContext
+ * @brief Constructor.
+ *
+ * @signature GdfIOContext::GdfIOContext();
+ * @signature GdfIOContext::GdfIOContext(contigNames, sampleNames);
+ *
+ * Default constructor or construction with references to contig and sample names.
+ */
 
 template <typename TNameStore_        = StringSet<CharString>,
           typename TNameStoreCache_   = NameStoreCache<TNameStore_>,
@@ -132,6 +160,110 @@ public:
 // ============================================================================
 // Functions
 // ============================================================================
+
+// ----------------------------------------------------------------------------
+// Function contigNames()
+// ----------------------------------------------------------------------------
+
+/*!
+ * @fn GdfIOContext#contigNames
+ * @brief Return reference to the contig names from @link GdfIOContext @endlink.
+ *
+ * @signature TNameStoreRef contigNames(context);
+ *
+ * @param[in] context The @link GdfIOContext @endlink to query.
+ *
+ * @return TNameStoreRef A reference to the <tt>TNameStore</tt> of the context.
+ */
+
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStore &
+contigNames(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> & context)
+{
+    return _referenceCast<TNameStore &>(context._contigNames);
 }
 
-#endif // INCLUDE_SEQAN_JOURNALED_STRING_TREE_DELTA_MAP_IO_HEADER_H_
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStore const &
+contigNames(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> const & context)
+{
+    return _referenceCast<TNameStore &>(context._contigNames);
+}
+
+/*!
+ * @fn GdfIOContext#contigNamesCache
+ * @brief Return reference to contig names cache from @link GdfIOContext @endlink.
+ *
+ * @signature TNameStoreCacheRef contigNamesCache(context);
+ *
+ * @param[in] context The @link GdfIOContext @endlink to query.
+ *
+ * @return TNameStoreCacheRef A reference to the <tt>TNameStoreCache</tt> of the context.
+ */
+
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStoreCache &
+contigNamesCache(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> & context)
+{
+    return _referenceCast<TNameStoreCache &>(context._contigNamesCache);
+}
+
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStoreCache const &
+contigNamesCache(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> const & context)
+{
+    return _referenceCast<TNameStoreCache &>(context._contigNamesCache);
+}
+
+/*!
+ * @fn GdfIOContext#sampleNames
+ * @brief Return reference to the sample names from @link GdfIOContext @endlink.
+ *
+ * @signature TNameStoreRef sampleNames(context);
+ *
+ * @param[in] context The @link GdfIOContext @endlink to query.
+ *
+ * @return TNameStoreRef A reference to the <tt>TNameStore</tt> of the context.
+ */
+
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStore &
+sampleNames(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> & context)
+{
+    return _referenceCast<TNameStore &>(context._sampleNames);
+}
+
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStore const &
+sampleNames(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> const & context)
+{
+    return _referenceCast<TNameStore &>(context._sampleNames);
+}
+
+/*!
+ * @fn GdfIOContext#sampleNamesCache
+ * @brief Return reference to the sample names cache from @link GdfIOContext @endlink.
+ *
+ * @signature TNameStoreCacheRef sampleNamesChache(context);
+ *
+ * @param[in] context The @link GdfIOContext @endlink to query.
+ *
+ * @return TNameStoreCacheRef A reference to the <tt>TNameStoreCache</tt> of the context.
+ */
+
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStoreCache &
+sampleNamesCache(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> & context)
+{
+    return _referenceCast<TNameStoreCache &>(context._sampleNamesCache);
+}
+
+template <typename TNameStore, typename TNameStoreCache, typename TStorageSpec>
+inline TNameStoreCache const &
+sampleNamesCache(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> const & context)
+{
+    return _referenceCast<TNameStoreCache &>(context._sampleNamesCache);
+}
+}
+
+#endif // INCLUDE_DEV_GDF_IO_GDF_CONTEXT_H_

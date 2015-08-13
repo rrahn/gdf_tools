@@ -51,49 +51,57 @@ namespace seqan
 // Tags, Classes, Enums
 // ============================================================================
 
+static const char * VCF_RECORD_FORMAT_GENOTYPE = "GT";
+static const char   VCF_RECORD_GENOTYPE_SEPARATOR_PHASED = '|';
+static const char   VCF_RECORD_GENOTYPE_SEPARATOR_UNPHASED = '/';
+static const char   VCF_RECORD_ALT_SYMBOLIC_ALLEL_BEGIN = '<';
+static const char   VCF_RECORD_ALT_SYMBOLIC_ALLEL_END = '>';
+static const char   VCF_RECORD_ALT_BREAKEND_REPL_DEFAULT = '[';
+static const char   VCF_RECORD_ALT_BREAKEND_REPL_REVCOMP = ']';
+
+
+struct BasicDeltaValue
+{
+    DeltaType       deltaType;
+    CharString      insBases;
+    unsigned        delBases;
+    unsigned        pos;
+    String<unsigned> coverage;
+};
+
+
 template <typename T>
 struct VcfRecordTranslator{};
 
-template <typename TValue, typename TAlphabet>
-struct VcfRecordTranslator<DeltaMap<TValue, TAlphabet> >
+template <typename TSequence, typename TConfig, typename TSpec>
+struct VcfRecordTranslator<JournaledStringTree<TSequence, TConfig, TSpec> >
 {
+    typedef JournaledStringTree<TSequence, TConfig, TSpec> TJst;
 
-    typedef DeltaMap<TValue, TAlphabet> TDeltaMap;
-    typedef typename DeltaValue<TDeltaMap, DeltaTypeSnp>::Type TSnp;
-    typedef typename DeltaValue<TDeltaMap, DeltaTypeDel>::Type TDel;
+    TJst & _jst;
 
-    TDeltaMap * _variantStorePtr;
-
-    VcfRecordTranslator() : _variantStorePtr(0)
+    VcfRecordTranslator(TJst & jst) : _jst(jst)
     {}
 
-    VcfRecordTranslator(TDeltaMap & variantStore) : _variantStorePtr(&variantStore)
-    {}
-
-    template <typename TVariantSet, typename TCoverageSet>
-    inline void operator()(TVariantSet const & varSet, TCoverageSet const & coverageSet, bool force = false)
+    template <typename TVariantSet>
+    inline void operator()(BasicDeltaValue const & basicDelta, bool force = false)
     {
-        SEQAN_ASSERT_EQ(length(varSet), length(coverageSet));
+        if (!force && empty(basicDelta.coverage))
+            return;
 
-        for (unsigned j = 0; j < length(coverageSet); ++j)
+        switch(basicDelta.deltaType)
         {
-            if (!force && testAllZeros(coverageSet[j]))
-                continue;
-
-            switch(varSet[j].variantType)
-            {
-                case DELTA_TYPE_SNP:
-                    insert(*_variantStorePtr, varSet[j].refPos, static_cast<TSnp>(varSet[j].seqBuffer[0]), coverageSet[j], DeltaTypeSnp());
-                    break;
-                case DELTA_TYPE_INS:
-                    insert(*_variantStorePtr, varSet[j].refPos, varSet[j].seqBuffer, coverageSet[j], DeltaTypeIns());
-                    break;
-                case DELTA_TYPE_DEL:
-                    insert(*_variantStorePtr, varSet[j].refPos, static_cast<TDel>(varSet[j].variantSize), coverageSet[j], DeltaTypeDel());
-                    break;
-                default:
-                    SEQAN_THROW(-1);
-            }
+            case DELTA_TYPE_SNP:
+                insert(_jst, basicDelta.pos, basicDelta.insBases[0], basicDelta.coverage, DeltaTypeSnp());
+                break;
+            case DELTA_TYPE_INS:
+                insert(_jst, basicDelta.pos, basicDelta.insBases, basicDelta.coverage, DeltaTypeIns());
+                break;
+            case DELTA_TYPE_DEL:
+                insert(_jst, basicDelta.pos, basicDelta.delBases, basicDelta.coverage, DeltaTypeDel());
+                break;
+            default:
+                throw(RuntimeError("Unknown delta event in vcf file."));
         }
     }
 };
@@ -110,13 +118,6 @@ struct VariantInfo
     {}
 };
 
-// ============================================================================
-// Metafunctions
-// ============================================================================
-
-// ============================================================================
-// Functions
-// ============================================================================
 
 // ============================================================================
 // Metafunctions
@@ -130,10 +131,11 @@ struct VariantInfo
 // Function _resolveConflicts()
 // ----------------------------------------------------------------------------
 
-template <typename TValue, typename TAlphabet, typename TSpec>
-inline void _resolveConflicts(DeltaMap<TValue, TAlphabet, TSpec> & deltaMap)
+template <typename TSequence, typename TConfig, typename TSpec>
+inline void _resolveConflicts(JournaledStringTree<TSequence, TConfig, TSpec> & jst)
 {
-    typedef DeltaMap<TValue, TAlphabet, TSpec> TDeltaMap;
+    typedef JournaledStringTree<TSequence, TConfig, TSpec> TJst;
+    typedef typename Member<TJst, JstDeltaMapMember>::Type TDeltaMap;
     typedef typename TDeltaMap::TDeltaEntries TDeltaEntries;
     typedef typename Value<TDeltaEntries>::Type TDeltaEntry;
     typedef typename DeltaRecord<TDeltaEntry>::Type TDeltaRecord;
@@ -143,6 +145,7 @@ inline void _resolveConflicts(DeltaMap<TValue, TAlphabet, TSpec> & deltaMap)
     typedef typename DeltaValue<TDeltaMap, DeltaTypeIns>::Type TIns;
     typedef typename DeltaValue<TDeltaMap, DeltaTypeSV>::Type TSV;
 
+    TDeltaMap& deltaMap = member(jst, JstDeltaMapMember());
     TStoreIter itBegin = begin(deltaMap, Standard());
     TStoreIter it = itBegin;
     TStoreIter itEnd = end(deltaMap, Standard());
@@ -225,111 +228,324 @@ inline void _resolveConflicts(DeltaMap<TValue, TAlphabet, TSpec> & deltaMap)
 // Function _extracVariants()
 // ----------------------------------------------------------------------------
 
-template <typename TVariantInfo, typename TVcfRecord>
-inline int _extractVariants(String<TVariantInfo> & varString,
-                            TVcfRecord & vcfRecord)
-{
-
-    StringSet<CharString> altVarSet;
-    splitString(altVarSet, vcfRecord.alt, ',');
-
-    resize(varString, length(altVarSet), Exact());
-
-    for (unsigned i = 0; i < length(varString); ++i)  // Iterate over the variants.
-    {
-        CharString alt = altVarSet[i];
-
-        int leftLcp = lcpLength(vcfRecord.ref, alt);
-        CharString altR(suffix(alt, leftLcp));  // Only take from left lcp different value.
-        CharString refR(suffix(vcfRecord.ref, leftLcp));  // Only take from right lcp different value.
-        reverse(altR);
-        reverse(refR);
-        int rightLcp = lcpLength(altR, refR);
-
-        // Extract the corresponding changes.
-        Segment<CharString, InfixSegment> refInf = infix(vcfRecord.ref, leftLcp, length(vcfRecord.ref) - rightLcp);
-        Segment<CharString, InfixSegment> altInf = infix(alt, leftLcp, length(alt) - rightLcp);
-
-        TVariantInfo & info = varString[i];
-        info.refPos = vcfRecord.beginPos + leftLcp;
-
-        // Variant is a SNP or a single base deletion.
-        if (length(refInf) == length(altInf))
-        {
-            if (length(alt) == 1 && alt[0] == '.')  // Single base deletion
-            {
-    //            std::cerr << "DEL ref: " << refInf << " alt: " << altInf << std::endl;
-                info.variantType = DELTA_TYPE_DEL;
-                info.variantSize = length(refInf);
-            }
-            else
-            {
-    //            std::cerr << "SNP ref: " << refInf << " alt: " << altInf << std::endl;
-                info.variantType = DELTA_TYPE_SNP;
-                info.variantSize = length(refInf);
-                info.seqBuffer = altInf;
-            }
-        }
-        // Variant is a deletion.
-        else if (length(altInf) == 0)
-        {
-    //        std::cerr << "DEL ref: " << refInf << " alt: " << altInf << std::endl;
-            info.variantType = DELTA_TYPE_DEL;
-            info.variantSize = length(refInf);
-        }
-        // Variant is an Insertion
-        else if (length(refInf) == 0)
-        {
-    //        std::cerr << "INS ref: " << refInf << " alt: " << altInf << std::endl;
-            info.variantType = DELTA_TYPE_INS;
-            info.variantSize = length(altInf);
-            info.seqBuffer = altInf;
-        }
-
-        // TODO(rrahn): Use structural variants.
-    }
-    return 0;
-}
+//template <typename TVariantInfo, typename TVcfRecord>
+//inline int _extractVariants(String<TVariantInfo> & varString,
+//                            TVcfRecord & vcfRecord)
+//{
+//
+//    StringSet<CharString> altVarSet;
+//    splitString(altVarSet, vcfRecord.alt, ',');
+//
+//    resize(varString, length(altVarSet), Exact());
+//
+//    for (unsigned i = 0; i < length(varString); ++i)  // Iterate over the variants.
+//    {
+//        CharString alt = altVarSet[i];
+//
+//        int leftLcp = lcpLength(vcfRecord.ref, alt);
+//        CharString altR(suffix(alt, leftLcp));  // Only take from left lcp different value.
+//        CharString refR(suffix(vcfRecord.ref, leftLcp));  // Only take from right lcp different value.
+//        reverse(altR);
+//        reverse(refR);
+//        int rightLcp = lcpLength(altR, refR);
+//
+//        // Extract the corresponding changes.
+//        Segment<CharString, InfixSegment> refInf = infix(vcfRecord.ref, leftLcp, length(vcfRecord.ref) - rightLcp);
+//        Segment<CharString, InfixSegment> altInf = infix(alt, leftLcp, length(alt) - rightLcp);
+//
+//        TVariantInfo & info = varString[i];
+//        info.refPos = vcfRecord.beginPos + leftLcp;
+//
+//        // Variant is a SNP or a single base deletion.
+//        if (length(refInf) == length(altInf))
+//        {
+//            if (length(alt) == 1 && alt[0] == '.')  // Single base deletion
+//            {
+//    //            std::cerr << "DEL ref: " << refInf << " alt: " << altInf << std::endl;
+//                info.variantType = DELTA_TYPE_DEL;
+//                info.variantSize = length(refInf);
+//            }
+//            else
+//            {
+//    //            std::cerr << "SNP ref: " << refInf << " alt: " << altInf << std::endl;
+//                info.variantType = DELTA_TYPE_SNP;
+//                info.variantSize = length(refInf);
+//                info.seqBuffer = altInf;
+//            }
+//        }
+//        // Variant is a deletion.
+//        else if (length(altInf) == 0)
+//        {
+//    //        std::cerr << "DEL ref: " << refInf << " alt: " << altInf << std::endl;
+//            info.variantType = DELTA_TYPE_DEL;
+//            info.variantSize = length(refInf);
+//        }
+//        // Variant is an Insertion
+//        else if (length(refInf) == 0)
+//        {
+//    //        std::cerr << "INS ref: " << refInf << " alt: " << altInf << std::endl;
+//            info.variantType = DELTA_TYPE_INS;
+//            info.variantSize = length(altInf);
+//            info.seqBuffer = altInf;
+//        }
+//
+//        // TODO(rrahn): Use structural variants.
+//    }
+//    return 0;
+//}
 
 // ----------------------------------------------------------------------------
 // Function _extractHaplotype()
 // ----------------------------------------------------------------------------
 
-template <typename TSource>
-inline unsigned
-_extractHaplotype(TSource const & source)
+//template <typename TSource>
+//inline unsigned
+//_extractHaplotype(TSource const & source)
+//{
+//    // Fast switch for diploides.
+//    switch(source)
+//    {
+//        case '0': return 0;
+//        case '1': return 1;
+//        case '2': return 2;
+//        default:
+//            unsigned res;
+//            std::stringstream buffer;
+//            buffer << source;
+//            buffer >> res;
+//            return res;
+//    }
+//}
+//
+//inline unsigned
+//numOfHaploytpesPerSequence(VcfHeader const & header)
+//{
+//    for (auto& headerRecord : header)
+//    {
+//        if (headerRecord.key == VCF_HEADER_PLOIDY_KEY)
+//            return lexicalCast<unsigned>(headerRecord.value);
+//    }
+//    return 1;  // Assume monoploid if no ploidy information is set.
+//}
+
+inline bool
+isGenotypePresent(VcfRecord const & record)
 {
-    // Fast switch for diploides.
-    switch(source)
-    {
-        case '0': return 0;
-        case '1': return 1;
-        case '2': return 2;
-        default:
-            unsigned res;
-            std::stringstream buffer;
-            buffer << source;
-            buffer >> res;
-            return res;
-    }
+    return startsWith(record.format, VCF_RECORD_FORMAT_GENOTYPE);
 }
+
+inline String<String<unsigned> >
+extractGenotypeInfos(VcfRecord const & record, StringSet<CharString> const & altSet)
+{
+    typedef OrFunctor<EqualsChar<VCF_RECORD_GENOTYPE_SEPARATOR_PHASED>, EqualsChar<VCF_RECORD_GENOTYPE_SEPARATOR_UNPHASED> > TPhasingSeparator;
+    typedef AssertFunctor<OrFunctor<IsDigit, EqualsChar<'.'> >, ParseError> TAssertFunctor;
+
+    String<String<unsigned> > altCoverageSet;
+    resize(altCoverageSet, length(altSet), Exact());
+
+    // The allel information (GT field in VCF) must be present and always comes at the first part.
+    if (isGenotypePresent(record))
+    {
+        // Parse genotype field per sample.
+        for (auto indIt = begin(record.genotypeInfos, Standard()); indIt != end(record.genotypeInfos, Standard()); ++indIt)
+        {
+            StringSet<CharString> genotypeField;
+            strSplit(genotypeField, *indIt, EqualsChar<':'>());
+
+            if (empty(front(genotypeField)))
+                continue;  // continue with next individual.
+
+            auto allelIt = begin(front(genotypeField), Standard());
+            CharString buffer;
+            String<int> altIds;
+            do
+            {
+                clear(buffer);
+                readUntil(buffer, allelIt, TPhasingSeparator(), TAssertFunctor());
+                skipOne(allelIt);
+
+                if (*allelIt == VCF_RECORD_GENOTYPE_SEPARATOR_UNPHASED)  // We don't support unphased genotypes
+                {
+                    clear(altIds);
+                    break;
+                }
+
+                SEQAN_ASSERT_EQ(length(buffer), 1);
+
+                if (buffer == ".")  // ignore unknown fields.
+                    appendValue(altIds, -1);
+
+                // Extract the haplotype specific position.
+                appendValue(altIds, lexicalCast<int>(buffer) - 1);
+            } while (allelIt != end(front(genotypeField)));
+
+            auto ploidy = length(altIds);
+            decltype(ploidy) haplotypeNum = 0;
+
+            for (decltype(ploidy) htNum = 0; htNum < length(altIds); ++htNum)
+            {
+                if (altIds[htNum] >= 0)
+                    appendValue(altCoverageSet[altIds[htNum]], ploidy * (indIt - begin(record.genotypeInfos, Standard())) + htNum);
+            }
+        }
+    }
+    return altCoverageSet;
+}
+
+template <typename TString>
+inline bool
+isSymbolicAllel(TString const & alt)
+{
+    if (front(alt) != VCF_RECORD_ALT_SYMBOLIC_ALLEL_BEGIN)
+        return false;
+
+    if (back(alt) == VCF_RECORD_ALT_SYMBOLIC_ALLEL_END)
+        return true;
+
+    CharString message = "Unknown alternative allel description: ";
+    append(message, alt);
+
+    throw(ParseError(toCString(message)));
+    return false;
+}
+
+template <typename TString>
+inline bool
+isBreakendReplacement(TString const & alt)
+{
+    if (front(alt) == VCF_RECORD_ALT_BREAKEND_REPL_DEFAULT || front(alt) == VCF_RECORD_ALT_BREAKEND_REPL_REVCOMP)
+        return true;
+    if (back(alt) == VCF_RECORD_ALT_BREAKEND_REPL_DEFAULT || back(alt) == VCF_RECORD_ALT_BREAKEND_REPL_REVCOMP)
+        return true;
+    return false;
+}
+
+inline BasicDeltaValue
+extractBasicDeltaValue(VcfRecord const & record, CharString const & alt)
+{
+    typedef ModifiedString<CharString const, ModReverse> TModReverse;
+
+    // Sanity check.
+    SEQAN_ASSERT(!isSymbolicAllel(alt));
+    SEQAN_ASSERT(!isBreakendReplacement(alt));
+
+    if (empty(record.ref) || empty(alt))
+        throw(IOError("Invalid REF or ALT value in VCF format."));
+
+    TModReverse revRef(record.ref);
+    TModReverse revAlt(alt);
+
+    auto lcp = lcpLength(record.ref, alt);
+    auto lcs = lcpLength(revRef, revAlt);
+    BasicDeltaValue val;
+    val.pos = record.beginPos;
+    if (length(record.ref) == length(alt))  // Simple replacement.
+    {
+        SEQAN_ASSERT_LT(lcp + lcs, length(record.ref));  // The lcp + lcs must be less than the actual length of the ref.
+        SEQAN_ASSERT_LT(lcp, length(alt) - lcs);
+        if (length(record.ref) == 1)
+            val.deltaType = DELTA_TYPE_SNP;
+        else
+            val.deltaType = DELTA_TYPE_SV;
+            val.insBases = infix(alt, lcp, length(alt) - lcs);
+        val.delBases = length(val.insBases);
+        --val.pos;
+    }
+    else  // Extract small InDel
+    {
+        bool refBaseAfter = (record.beginPos == 1);  // REF base is the one after the event.
+
+        if (length(record.ref) < length(alt))  // Simple insertion.
+        {
+            if (refBaseAfter)
+            {
+                val.insBases = prefix(alt, length(alt) - lcs);  // Can only be the prefix until the common suffix begins.
+                --val.pos;
+            }
+            else
+            {
+                val.insBases = infix(alt, lcp, lcp + length(alt) - length(record.ref));
+            }
+            val.deltaType = DELTA_TYPE_INS;
+        }
+        else  // Simple deletion.
+        {
+            if (refBaseAfter)
+            {
+                val.insBases = prefix(record.ref, length(record.ref) - lcs);  // Can only be the prefix until the common suffix begins.
+                --val.pos;
+            }
+            else
+            {
+                val.insBases = infix(record.ref, lcp, lcp + length(record.ref) - length(alt));
+            }
+            val.deltaType = DELTA_TYPE_DEL;
+        }
+    }
+    return val;
+}
+
+inline String<BasicDeltaValue>
+extractDeltaEvent(VcfRecord const & record, StringSet<CharString> const & altSet)
+{
+    String<BasicDeltaValue> deltas;
+
+    // Extract delta event value for every ALT of the current record.
+    for (auto & alt : altSet)
+    {
+        if (isSymbolicAllel(alt))  // Precise or imprecise structural variants
+        {
+            SEQAN_ASSERT_FAIL("Implement me!");
+        }
+        else if (isBreakendReplacement(alt))  // Complex breakpoints.
+        {
+            SEQAN_ASSERT_FAIL("Implement me!");
+        }
+        else  // Simple SNP or small InDel
+        {
+            appendValue(deltas, extractBasicDeltaValue(record, alt));
+        }
+    }
+    return deltas;
+}
+
+inline String<BasicDeltaValue>
+extractGenotypes(VcfRecord const & record)
+{
+    StringSet<CharString> altSet;
+    strSplit(altSet, record.alt, EqualsChar<','>());
+
+    // Extract genotypes per individual per haplotype.
+    auto coverages = extractGenotypeInfos(record, altSet);
+    auto deltaEvents = extractDeltaEvent(record, altSet);
+    
+    SEQAN_ASSERT_EQ(length(coverages), length(deltaEvents));
+    
+    auto itCov = begin(coverages, Standard());
+    auto itDel = begin(deltaEvents, Standard());
+    for (; itDel != end(deltaEvents, Standard()); ++itDel, ++itCov)
+    {
+        itDel->coverage = *itCov;
+    }
+    return deltaEvents;
+}
+
 
 // ----------------------------------------------------------------------------
 // Function _readVcfRecords
 // ----------------------------------------------------------------------------
 
-template <typename TValue, typename TAlphabet1, typename TStream, typename TSize>
+template <typename TJst, typename TSize>
 inline int
-_readVcfRecords(VcfRecordTranslator<DeltaMap<TValue, TAlphabet1> > & delegate,
-                VcfIOContext & vcfContext,
-                RecordReader<TStream, SinglePass<> > & vcfReader,
+_readVcfRecords(VcfRecordTranslator<TJst> & delegate,
+                VcfFileIn & vcfFile,
                 TSize numSeq,
                 ConverterOptions const & options)
 {
-    typedef DeltaMap<TValue, TAlphabet1> TDeltaMap;
-    typedef typename DeltaValue<TDeltaMap, DeltaTypeIns>::Type TInsBuffer;
-    typedef typename DeltaValue<TDeltaMap, DeltaTypeDel>::Type TDel;
-    typedef VariantInfo<TDel, TDel, TInsBuffer> TVariantInfo;
+//    typedef DeltaMap<TValue, TAlphabet1> TDeltaMap;
+//    typedef typename DeltaValue<TDeltaMap, DeltaTypeIns>::Type TInsBuffer;
+//    typedef typename DeltaValue<TDeltaMap, DeltaTypeDel>::Type TDel;
+//    typedef VariantInfo<TDel, TDel, TInsBuffer> TVariantInfo;
 //    typedef typename Value<TInsBuffer>::Type TAlphabet;
 
 
@@ -341,10 +557,10 @@ _readVcfRecords(VcfRecordTranslator<DeltaMap<TValue, TAlphabet1> > & delegate,
     unsigned pos = 0;
 //#endif //PRINT_DOTS
 
-//    unsigned numSeq = totalSequences;  // Total number of sequences.
-
-    String<bool, Packed<> > altCoverage;
-    resize(altCoverage, numSeq, false, Exact());   // Coverage of all sequences.
+////    unsigned numSeq = totalSequences;  // Total number of sequences.
+//
+//    String<bool, Packed<> > altCoverage;
+//    resize(altCoverage, numSeq, false, Exact());   // Coverage of all sequences.
 
     if (options.includeReference)
         --numSeq;  // Remove reference from index because it cannot have an alternative site.
@@ -366,15 +582,13 @@ _readVcfRecords(VcfRecordTranslator<DeltaMap<TValue, TAlphabet1> > & delegate,
 
     CharString svFlag = "SVTYPE";
     VcfRecord vcfRecord;
-    while(!atEnd(vcfReader))
+    while(!atEnd(vcfFile))
     {
+        clear(vcfRecord);
         ++counter;
         double timeRead = sysTime();
-        if (readRecord(vcfRecord, vcfReader, vcfContext, Vcf()) != 0)
-        {
-            std::cerr << "Error when reading vcf file!" << std::endl;
-            return 1;
-        }
+        readRecord(vcfRecord, vcfFile);
+
         timeTable[3] += sysTime() - timeRead;
 
 //#ifdef PRINT_DOTS
@@ -405,66 +619,78 @@ _readVcfRecords(VcfRecordTranslator<DeltaMap<TValue, TAlphabet1> > & delegate,
         if (vcfRecord.filter == "PASS" && startsWith(vcfRecord.format, "GT") &&
             !startsWith(vcfRecord.info, "IMPRECISE") && !(vcfRecord.qual != vcfRecord.qual))
         {
+            String<BasicDeltaValue> basicDeltaValue = extractGenotypes(vcfRecord);
 
-            // Extracts all alternative allels for the current loci.
-            String<TVariantInfo> variantInfoString;
+            if (empty(basicDeltaValue))  // No information extrated.
+                continue;
 
-            double timeExtract = sysTime();
-            _extractVariants(variantInfoString, vcfRecord);
-            timeTable[0] += sysTime() - timeExtract;
-
-            // Coverages per alternative allel for the current loci.
-            String<String<bool, Packed<> > > altCoverageSet;
-            resize(altCoverageSet, length(variantInfoString), altCoverage, Exact());
-
-            // Read the combined genotype.
-            if (options.readGenotype)
+            auto minHt = _min(length(options.haplotypes), length(basicDeltaValue));
+            for (decltype(minHt) htNum = minHt; htNum < minHt; ++minHt)
             {
-                for (unsigned seqId = 0; seqId < numSeq; ++seqId)
-                {
-                    // Process all haplotypes to generate a single genotype representing one value or not.
-                    int altPos = 0;
-                    for (unsigned htId = 0; htId < 2u; ++htId)  // NOTE(rmaerker): We only assume diploid.
-                    {
-                        double timeHaplotype = sysTime();
-                        int tmpAlt = _extractHaplotype(vcfRecord.genotypeInfos[seqId][htId << 1]);  // Extract the alt position for the current sequence.
-                        timeTable[1] += sysTime() - timeHaplotype;
-                        if(altPos == 0 && tmpAlt != 0)
-                        {
-                            altPos = tmpAlt;
-                            double timeAssignVec = sysTime();
-                            assignValue(altCoverageSet[tmpAlt - 1], seqId, true);
-                            timeTable[4] += sysTime() - timeAssignVec;
-                        }
-                        if (tmpAlt != 0 && tmpAlt != altPos)
-                            std::cerr << "WARNING: Different allels at the same loci in: " << vcfRecord.rID  << " at "  << vcfRecord.beginPos << " for " << seqId << "!" << std::endl;
-                    }
-                }
+                double timeDelegate = sysTime();
+                delegate(basicDeltaValue[htNum]);
+                timeTable[2] += sysTime() - timeDelegate;
             }
-            else
-            {
-                unsigned seqId = 0;
-                unsigned individualId = 0;
-                while (seqId < numSeq)
-                {
-                    // Iterate each haplotype.
-                    for (unsigned htId = 0; htId < length(options.haplotypes); ++htId, ++seqId)
-                    {
-                        // Extract the variant per individual per haplotype.
-                        double timeHaplotype = sysTime();
-                        int altPos = _extractHaplotype(vcfRecord.genotypeInfos[individualId][options.haplotypes[htId] * 2]);  // Extract the alt position for the current sequence.
-                        timeTable[1] += sysTime() - timeHaplotype;
-
-                        if (altPos != 0)
-                        {
-                            double timeAssignVec = sysTime();
-                            assignValue(altCoverageSet[--altPos], seqId, true);
-                            timeTable[4] += sysTime() - timeAssignVec;
-                        }
-                    }
-                    ++individualId;
-                }
-            }
+//
+//            // Extracts all alternative allels for the current loci.
+//            String<TVariantInfo> variantInfoString;
+//
+//            double timeExtract = sysTime();
+//            _extractVariants(variantInfoString, vcfRecord);
+//            timeTable[0] += sysTime() - timeExtract;
+//
+//            // Coverages per alternative allel for the current loci.
+//            String<String<bool, Packed<> > > altCoverageSet;
+//            resize(altCoverageSet, length(variantInfoString), altCoverage, Exact());
+//
+//            // Read the combined genotype.
+//            if (options.readGenotype)
+//            {
+//                for (unsigned seqId = 0; seqId < numSeq; ++seqId)
+//                {
+//                    // Process all haplotypes to generate a single genotype representing one value or not.
+//                    int altPos = 0;
+//                    for (unsigned htId = 0; htId < 2u; ++htId)  // NOTE(rmaerker): We only assume diploid.
+//                    {
+//                        double timeHaplotype = sysTime();
+//                        int tmpAlt = _extractHaplotype(vcfRecord.genotypeInfos[seqId][htId << 1]);  // Extract the alt position for the current sequence.
+//                        timeTable[1] += sysTime() - timeHaplotype;
+//                        if(altPos == 0 && tmpAlt != 0)
+//                        {
+//                            altPos = tmpAlt;
+//                            double timeAssignVec = sysTime();
+//                            assignValue(altCoverageSet[tmpAlt - 1], seqId, true);
+//                            timeTable[4] += sysTime() - timeAssignVec;
+//                        }
+//                        if (tmpAlt != 0 && tmpAlt != altPos)
+//                            std::cerr << "WARNING: Different allels at the same loci in: " << vcfRecord.rID  << " at "  << vcfRecord.beginPos << " for " << seqId << "!" << std::endl;
+//                    }
+//                }
+//            }
+//            else
+//            {
+//                unsigned seqId = 0;
+//                unsigned individualId = 0;
+//                while (seqId < numSeq)
+//                {
+//                    // Iterate each haplotype.
+//                    for (unsigned htId = 0; htId < length(options.haplotypes); ++htId, ++seqId)
+//                    {
+//                        // Extract the variant per individual per haplotype.
+//                        double timeHaplotype = sysTime();
+//                        int altPos = _extractHaplotype(vcfRecord.genotypeInfos[individualId][options.haplotypes[htId] * 2]);  // Extract the alt position for the current sequence.
+//                        timeTable[1] += sysTime() - timeHaplotype;
+//
+//                        if (altPos != 0)
+//                        {
+//                            double timeAssignVec = sysTime();
+//                            assignValue(altCoverageSet[--altPos], seqId, true);
+//                            timeTable[4] += sysTime() - timeAssignVec;
+//                        }
+//                    }
+//                    ++individualId;
+//                }
+//            }
 
 //            std::cerr << "[LOG] Processed line: " << counter << std::endl;
 //            if (counter == 1)
@@ -492,9 +718,6 @@ _readVcfRecords(VcfRecordTranslator<DeltaMap<TValue, TAlphabet1> > & delegate,
 //                }
 //                std::cerr << "[LOG] ________Print_STOP__________________________________________________" << std::endl;
 //            }
-            double timeDelegate = sysTime();
-            delegate(variantInfoString, altCoverageSet);
-            timeTable[2] += sysTime() - timeDelegate;
             // Iterates over the variants at this position.
         }
 //#ifdef PRINT_DOTS
@@ -519,31 +742,27 @@ _readVcfRecords(VcfRecordTranslator<DeltaMap<TValue, TAlphabet1> > & delegate,
 // Function _convertVcfToGdf()
 // ----------------------------------------------------------------------------
 
-template <typename TStream, typename TReference, typename TRefAlphabet, typename TVarAlphabet>
-int _convertVcfToGdf(GdfHeader & gdfHeader,
-                     TReference const & ref,
-                     VcfIOContext & vcfContext,
-                     RecordReader<TStream, SinglePass<> > & vcfReader,
-                     ConverterOptions const & converterOptions,
+template <typename TReference, typename TRefAlphabet, typename TVarAlphabet>
+int _convertVcfToGdf(GdfFileOut & gdfOut,
+                     TReference & ref,
+                     VcfFileIn & vcfFile,
+                     ConverterOptions const & options,
                      TRefAlphabet const & /*refAlphabet*/,
                      TVarAlphabet const & /*snpAlphabet*/)
 {
-    typedef DeltaMap<unsigned, TVarAlphabet> TDeltaMap;
-    typedef JournaledStringTree<TDeltaMap, StringTreeDefault> TJst;
+    typedef String<TRefAlphabet>        THost;
+    typedef JournaledStringTree<THost>  TJst;
 
-    TDeltaMap deltaMap;
-    setCoverageSize(deltaMap, length(gdfHeader.nameStore));
-    VcfRecordTranslator<TDeltaMap> delegate(deltaMap);
+    TJst jst(ref, length(sampleNames(context(gdfOut))));
+
+    VcfRecordTranslator<TJst> delegate(jst);
 
     double start = sysTime();
-    _readVcfRecords(delegate, vcfContext, vcfReader, length(gdfHeader.nameStore), converterOptions);
-    if (converterOptions.verbosity > 1)
+    _readVcfRecords(delegate, vcfFile, length(jst), options);
+    if (options.verbosity > 1)
         std::cout << "Time for reading vcf: " << sysTime() - start << std::endl;
 
-    _resolveConflicts(deltaMap);
-
-    TJst jst;
-    init(jst, ref, deltaMap);
+    _resolveConflicts(jst);
 
 //    std::ofstream outputStream;
 //    outputStream.open(toCString(converterOptions.outputFile), std::ios_base::out);
@@ -555,12 +774,16 @@ int _convertVcfToGdf(GdfHeader & gdfHeader,
 
     start = sysTime();
 
-    save(jst, gdfHeader, converterOptions.outputFile);
+    // Now we want to write the gdf file.
 
-    if (converterOptions.verbosity > 1)
+    // It would be nice to have such a file.
+
+    save(jst, gdfOut);  // Write save function. Export this later to develop.
+
+    if (options.verbosity > 1)
     {
         std::cout << "Time for writing: " << sysTime() - start << std::endl;
-        std::cout << "Number of converted nodes: " << length(deltaMap);
+        std::cout << "Number of converted nodes: " << size(jst);
     }
     return 0;
 }
@@ -570,72 +793,71 @@ int _convertVcfToGdf(GdfHeader & gdfHeader,
 // ----------------------------------------------------------------------------
 
 template <typename TRefAlphabet, typename TVarAlphabet>
-int adaptVcfToJournalData(ConverterOptions const & converterOptions,
+int adaptVcfToJournalData(ConverterOptions const & options,
                           TRefAlphabet const & /*refAlphabet*/,
                           TVarAlphabet const & /*varAlphabet*/)
 {
     typedef String<TRefAlphabet, Alloc<> > TReference;
 
-    if (converterOptions.verbosity > 0)
+    if (options.verbosity > 0)
             std::cout << "Start converting vcf." << std::flush;
 
     // Open and read the sequence database.
-    std::ifstream vcfStream;
-    vcfStream.open(toCString(converterOptions.inputFile), std::ios_base::in);
-    if (!vcfStream.good())
+    VcfFileIn vcfFile;
+
+    if (!open(vcfFile, toCString(options.inputFile), OPEN_RDONLY))
     {
-        std::cerr << "ERROR: Could not open "<<  converterOptions.inputFile << "!" << std::endl;
-        return -1;
+        std::stringstream msg;
+        msg << "Could not open vcf file < " << options.inputFile << " >!";
+        throw IOError(msg.str().c_str());
     }
 
     VcfHeader vcfHeader;
-    VcfIOContext vcfContext(vcfHeader.sequenceNames, vcfHeader.sampleNames);
-    RecordReader<std::ifstream, SinglePass<> > vcfReader(vcfStream);
-    read(vcfHeader, vcfReader, vcfContext, Vcf());
+    readHeader(vcfHeader, vcfFile);
 
-    unsigned numSamples = _min(length(vcfHeader.sampleNames), converterOptions.numIndividuals);
+    unsigned numSamples = _min(length(sampleNames(context(vcfFile))), options.numIndividuals);
     // Resize to the maximum number of individuals that can be parsed.
-    unsigned totalSequences = numSamples * length(converterOptions.haplotypes);
+    unsigned totalSequences = numSamples * length(options.haplotypes);
 
+    GdfFileOut gdfOut;
+    if (!open(gdfOut, toCString(options.outputFile), OPEN_WRONLY))
+    {
+        std::stringstream msg;
+        msg << "Could not open gdf file < " << options.outputFile << " >!";
+        throw IOError(msg.str().c_str());
+    }
     // Load information for the gdfHeader.
     GdfHeader gdfHeader;
+
     // Prepare the sequence names for the output of the delta file.
-    if (converterOptions.readGenotype)
+    resize(sampleNames(context(gdfOut)), totalSequences, Exact());
+    unsigned seqId = 0;
+    for (unsigned individualId = 0; individualId < numSamples; ++individualId)
     {
-        resize(gdfHeader.nameStore, numSamples, Exact());
-        for (unsigned i = 0; i < numSamples; ++i)
-            assignValue(gdfHeader.nameStore, i, getValue(vcfHeader.sampleNames, i));
+        for (unsigned j = 0; j < length(options.haplotypes); ++j, ++seqId)
+        {
+            CharString fileName = getValue(sampleNames(context(vcfFile)), individualId);
+            std::stringstream nameStream;
+            nameStream << "_ht_" << options.haplotypes[j];
+            append(fileName, nameStream.str());
+            assignValue(sampleNames(context(gdfOut)), seqId, fileName);
+        }
     }
-    else
-    {
-        resize(gdfHeader.nameStore, totalSequences, Exact());
-        unsigned seqId = 0;
-        for (unsigned individualId = 0; individualId < numSamples; ++individualId)
-            for (unsigned j = 0; j < length(converterOptions.haplotypes); ++j, ++seqId)
-            {
-                CharString fileName = getValue(vcfHeader.sampleNames, individualId);
-                std::stringstream nameStream;
-                nameStream << "_ht_" << converterOptions.haplotypes[j];
-                append(fileName, nameStream.str());
-                assignValue(gdfHeader.nameStore, seqId, fileName);
-            }
-    }
+
+   refresh(sampleNamesCache(context(gdfOut)));  // refresh the name store cache.
 
     // Load the reference infos.
-    gdfHeader.referenceFilename = converterOptions.vcfReferenceFile;
-    gdfHeader.referenceMode = GdfIOMode::SAVE_REFERENCE_MODE_DISABLED;
+    context(gdfOut).refUri = options.vcfReferenceFile;
     TReference reference;
-    if (_loadSequenceFasta(gdfHeader.referenceId, reference, gdfHeader.referenceFilename) != 0)
-        return -1;
+    _loadContigs(context(gdfOut).refID, reference, toCString(context(gdfOut).refUri));
 
-    if (converterOptions.includeReference)
-        appendValue(gdfHeader.nameStore, gdfHeader.referenceId);  // Last one.
+    // Add reference as file to the set of sequences.
+    if (options.includeReference)
+        appendValue(context(gdfOut), context(gdfOut).refID);  // Last one.
 
-    _convertVcfToGdf(gdfHeader, reference, vcfContext, vcfReader, converterOptions, TRefAlphabet(), TVarAlphabet());
+    _convertVcfToGdf(gdfOut, reference, vcfFile, options, TRefAlphabet(), TVarAlphabet());
 
-
-    vcfStream.close();
-    if (converterOptions.verbosity > 0)
+    if (options.verbosity > 0)
         std::cout << "\tDone!" << std::endl;
 
     return 0;

@@ -82,6 +82,7 @@ readHeader(GdfHeader & header,
            TForwardIter & iter,
            Gdf /*tag*/)
 {
+    CharString buffer;
     // Read file information.
     write(buffer, iter, 4);  // Read 4 bytes from input iterator.
     if (*iter != GDF_VERSION_MAJOR)
@@ -91,7 +92,7 @@ readHeader(GdfHeader & header,
         throw ParseError("Incompatible minor version number!");
     skipNChars(iter, 2);
 
-    CharString buffer;
+    clear(buffer);
     readLine(buffer, iter);
 
     if (!startsWith(buffer, "!!ref_id="))

@@ -71,8 +71,8 @@ writeHeader(TTarget & target,
 {
     // Write file information.
     write(target, &MagicHeader<Gdf>::VALUE[0], 4);
-    writeValue(GDF_VERSION_MAJOR);
-    writeValue(GDF_VERSION_MINOR);
+    writeValue(target, GDF_VERSION_MAJOR);
+    writeValue(target, GDF_VERSION_MINOR);
 
     // Write reference file information.
     if (empty(context.refID))
@@ -80,18 +80,18 @@ writeHeader(TTarget & target,
     if (empty(context.refURI))
         throw (ParseError("Reference URI not set!"));
 
-    write(target, "!!ref_id=");
+    write(target, "!!ref_id=", 9);
     write(target, context.refID);
     writeValue(target, '\n');
-    write(target, "!!ref_uri=");
+    write(target, "!!ref_uri=", 10);
     write(target, context.refURI);
     writeValue(target, '\n');
 
     // Write compression information.
-    write(target, "!!snp_compression=");
-    if (isEqual(context.snpCompStrategy, SnpCompStrategy2BitEncoding))
+    write(target, "!!snp_compression=", 18);
+    if (isEqual(context.snpCompStrategy, SnpCompStrategy2BitEncoding()))
         writeValue(target, '2');
-    else if (isEqual(context.snpCompStrategy, SnpCompStrategy2BitEncoding))
+    else if (isEqual(context.snpCompStrategy, SnpCompStrategyRaw()))
         writeValue(target, '1');
     else
         throw (ParseError("Unknown snp compression strategy!"));
@@ -100,7 +100,7 @@ writeHeader(TTarget & target,
     // Write additional information.
     for (auto& headerRecord : header)
     {
-        write(target, "##");
+        write(target, "##", 2);
         write(target, headerRecord.key);
         writeValue(target, '=');
         write(target, headerRecord.value);
@@ -108,7 +108,7 @@ writeHeader(TTarget & target,
     }
 
     // Write sample names.
-    write(target, "##sample_names=")
+    write(target, "##sample_names=", 15);
     for (auto& name : sampleNames(context))
     {
         write(target, name);
@@ -199,10 +199,8 @@ template <typename TTarget, typename TRecordIter, typename TSnpCompressionStrate
 inline int _writeDataBlock(TTarget & target,
                            TRecordIter & itBegin,
                            TRecordIter & itEnd,
-                           TSnpCompressionStrategy const & /*deltaMap*/)
+                           TSnpCompressionStrategy const & /*compStrategy*/)
 {
-    typedef DeltaMap<TValue, TAlphabet> TDeltaMap;
-
     CharString blockBuffer;
     typename Iterator<CharString>::Type blockBuffIt;
     __uint32 lastRefPos = itBegin->contigPos;
@@ -259,7 +257,7 @@ inline int _writeDataBlock(TTarget & target,
 //                typedef typename DeltaValue<TDeltaMap const, DeltaType::DELTA_TYPE_INS>::Type TIns;
 
                 // Handle Indel.
-                if (it->deltaType == DeltaType::DELTA_TYPE_INDEL)
+                if (it->deltaType == DeltaType::DELTA_TYPE_SV)
                 {
 //                    TIns ins = deltaIndel(itDelta).i2;
                     __uint32 insLength = length(it->insValue);
@@ -319,7 +317,7 @@ inline int _writeDataBlock(TTarget & target,
 //    streamWriteBlock(stream, reinterpret_cast<char*>(&blockLength), sizeof(blockLength));
 //    streamWriteBlock(stream, &blockBuffer[0], blockLength);
 
-    auto it = itBegin;
+    it = itBegin;
     typedef typename std::remove_reference<decltype(host(it->coverage)[0])>::type THostValue;
     __uint32 hostSize = length(host(it->coverage)) * sizeof(THostValue());
     appendRawPod(target, hostSize);
@@ -385,7 +383,7 @@ _writeDataBlock(TBuffer & buffer,
     typedef typename TTagList::Type TFormat;
 
     if (isEqual(format, TFormat()))
-        _writeDataBlock(buffer, begin(record.data), end(record.data), TFormat());
+        _writeDataBlock(buffer, begin(record, Standard()), end(record, Standard()), TFormat());
     else
         _writeDataBlock(buffer, record, static_cast<typename TagSelector<TTagList>::Base const &>(format));
 }

@@ -121,12 +121,12 @@ char const * FileExtensions<Gdf, T>::VALUE[1] =
 // Metafunction FormattedFileContext
 // ----------------------------------------------------------------------------
 
-template <typename TSpec, typename TStorageSpec>
-struct FormattedFileContext<FormattedFile<Gdf, Input, TSpec>, TStorageSpec>
+template <typename TSpec, typename TDirection, typename TStorageSpec>
+struct FormattedFileContext<FormattedFile<Gdf, TDirection, TSpec>, TStorageSpec>
 {
     typedef StringSet<CharString>                                   TNameStore;
     typedef NameStoreCache<TNameStore>                              TNameStoreCache;
-    typedef GdfIOContext<TNamStore, TNameStoreCache, TStorageSpec>  Type;
+    typedef GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> Type;
 };
 
 // ----------------------------------------------------------------------------
@@ -134,7 +134,7 @@ struct FormattedFileContext<FormattedFile<Gdf, Input, TSpec>, TStorageSpec>
 // ----------------------------------------------------------------------------
 
 template <typename TDirection, typename TSpec>
-struct FileFormat<FormattedFile<Gff, TDirection, TSpec> >
+struct FileFormat<FormattedFile<Gdf, TDirection, TSpec> >
 {
     typedef TagSelector<
                 TagList<Gdf>

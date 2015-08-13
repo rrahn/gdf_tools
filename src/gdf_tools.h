@@ -37,6 +37,8 @@
 #ifndef EXTRAS_APPS_GDF_TOOLS_GDF_TOOLS_H_
 #define EXTRAS_APPS_GDF_TOOLS_GDF_TOOLS_H_
 
+#include <sstream>
+
 #include <seqan/basic.h>
 #include <seqan/arg_parse.h>
 #include <seqan/sequence.h>
@@ -154,22 +156,20 @@ inline void _printJournalStat(TJournalString const & journal)
 // ----------------------------------------------------------------------------
 
 template <typename TId, typename TSequence>
-inline int _loadSequenceFasta(TId & idString,
-                              TSequence & sequence,
-                              CharString file)
+inline void
+_loadContigs(TId & idString,
+             TSequence & sequence,
+             const char * fileName)
 {
-    std::ifstream fileStream(toCString(file), std::ios_base::in);
-    if (!fileStream.good())
+    SeqFileIn refIn;
+    if (open(refIn, fileName, OPEN_RDONLY))
     {
-        std::cerr << "Can't read file <" << file << "!"<< std::endl;
-        return -1;
+        std::stringstream msg;
+        msg << "Cannot open reference file < " << fileName << " >!";
+        throw IOError(msg.str().c_str());
     }
 
-    RecordReader<std::ifstream, SinglePass<> > recReader(fileStream);
-    int res = readRecord(idString, sequence, recReader, Fasta());
-    if (res != 0)
-        return -1;
-    return 0;
+    readRecord(idString, sequence, refIn);
 }
 
 

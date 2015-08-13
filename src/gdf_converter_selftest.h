@@ -37,6 +37,9 @@
 #ifndef EXTRAS_APPS_GDF_TOOLS_GDF_CONVERTER_SELFTEST_H_
 #define EXTRAS_APPS_GDF_TOOLS_GDF_CONVERTER_SELFTEST_H_
 
+#include <dev/gdf_io.h>
+#include <seqan/journaled_string_tree.h>
+
 #include "gdf_tools.h"
 #include "gdf_converter_vcf.h"
 
@@ -77,76 +80,93 @@ namespace seqan
 template <typename TRefAlphabet, typename TVarAlphabet>
 inline bool _runSelftest(ConverterOptions const & options, TRefAlphabet /*ref*/, TVarAlphabet /*var*/)
 {
-    typedef DeltaMap<unsigned, TVarAlphabet> TDeltaMap;
-    typedef String<TRefAlphabet, Alloc<> > TReference;
 
-    typedef JournaledStringTree<TDeltaMap> TJst;
+    typedef String<TRefAlphabet, Alloc<> >                      TReference;
+
+    typedef JournaledStringTree<TReference>                     TJst;
+    typedef typename Member<TJst, JstDeltaMapMember>::Type      TDeltaMap;
+    typedef typename DeltaValue<TDeltaMap, DeltaTypeSV>::Type   TDeltaSV;
+
 //    typedef StringSet<TReference> TSet;
 
-    TJst jst;
+    GdfFileIn gdfFile;
+    if (!open(gdfFile, toCString(options.outputFile), OPEN_RDONLY))
+    {
+        std::cerr << "Error: Could not read gdf file: " << options.outputFile << std::endl;
+        return false;
+    }
+
     GdfHeader header;
+    readHeader(header, gdfFile);
 
-    SEQAN_TRY
+    // We need to read the reference as well.
+    SeqFileIn refFile;
+    if (!open(gdfFile, toCString(context(gdfFile).refUri), OPEN_RDONLY))
     {
-        open(jst, header, options.outputFile);
-    }
-    SEQAN_CATCH(GdfIOException e)
-    {
-        std::cerr << e.what() << std::endl;
+        std::cerr << "Error: Could not read reference file: " << context(gdfFile).refUri << std::endl;
         return false;
     }
-
-    // Create full journaled string tree.
-    create(jst, 1);
-
-    // Read the reference file.
-    std::ifstream refStream;
-    refStream.open(toCString(options.vcfReferenceFile), std::ios_base::in);
-    if (!refStream.good())
-    {
-        std::cerr << "[LOG] Error while opening " << options.vcfReferenceFile << "!\n[LOG] Abort ..." << std::endl;
-        return false;
-    }
-    RecordReader<std::ifstream, SinglePass<> > refReader(refStream);
 
     CharString refId;
     TReference ref;
-    while (!atEnd(refReader))
+    readRecord(refId, ref, refFile);
+
+
+    TJst jst(ref, length(sampleNames(context(gdfFile))));
+
+    GdfRecord record;
+    while (!atEnd(gdfFile))
     {
-        if (readRecord(refId, ref, refReader, Fasta()))
+        readRecord(record, gdfFile);
+        for (auto& gdfRec : record)
         {
-            std::cerr << "[LOG] Error while reading  " << options.vcfReferenceFile << "!\n[LOG] Abort ..." << std::endl;
-            return false;
+            switch (gdfRec.deltaType)
+            {
+                case DELTA_TYPE_SNP:
+                    insert(jst, gdfRec.contigPos, gdfRec.insValue[0], gdfRec.coverage, DeltaTypeSnp());
+                    break;
+                case DELTA_TYPE_DEL:
+                    insert(jst, gdfRec.contigPos, gdfRec.delValue, gdfRec.coverage, DeltaTypeDel());
+                    break;
+                case DELTA_TYPE_INS:
+                    insert(jst, gdfRec.contigPos, gdfRec.insValue, gdfRec.coverage, DeltaTypeIns());
+                    break;
+                case DELTA_TYPE_SV:
+                    insert(jst, gdfRec.contigPos, Pair<unsigned, CharString>(gdfRec.delValue, gdfRec.insValue), gdfRec.coverage, DeltaTypeSV());
+                    break;
+                default:
+                    SEQAN_ASSERT_FAIL("Unknown delta type!");
+            }
         }
     }
 
     // B) Open vcf and generate fasta based on converter.
-    std::ifstream compStream;
-    compStream.open(toCString(options.compareFile), std::ios_base::in);
-    if (!compStream.good())
+    SeqFileIn compFile;
+    if (!open(compFile, toCString(options.compareFile), OPEN_RDONLY))
     {
         std::cerr << "[LOG] Error while opening " << options.compareFile << "!\n[LOG] Abort ..." << std::endl;
-
         return false;
     }
-    // Now we parse the vcf file and check if the delta is present at the given position.
-    RecordReader<std::ifstream, SinglePass<> > reader(compStream);
 
     bool result = true;
     unsigned counter = 0;
-    while (!atEnd(reader))
+    while (!atEnd(compFile))
     {
         CharString seqId;
         TReference seq;
-        if (readRecord(seqId, seq, reader, Fasta()))
+        try
+        {
+            readRecord(seqId, seq, compFile
+        }
+        catch
         {
             std::cerr << "[LOG] Error while reading  " << options.compareFile << "!\n[LOG] Abort ..." << std::endl;
             return false;
         }
 
-        if (seqId != header.nameStore[counter])
+        if (seqId != sampleNames(context(gdfFile))[counter])
         {
-            std::cerr << "[LOG] Sequence Ids don't match. Gdf-ID at [" << counter << "]: " << header.nameStore[counter] << " and Fasta-ID: " << seqId << "!" << std::endl;
+            std::cerr << "[LOG] Sequence Ids don't match. Gdf-ID at [" << counter << "]: " << sampleNames(context(gdfFile))[counter] << " and Fasta-ID: " << seqId << "!" << std::endl;
             result = false;
         }
         if (seq != stringSet(jst)[counter])

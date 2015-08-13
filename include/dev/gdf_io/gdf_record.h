@@ -56,7 +56,7 @@ struct GdfHeaderRecord
 {
     CharString key;
     CharString value;
-}
+};
 
 typedef String<GdfHeaderRecord> GdfHeader;
 
@@ -71,62 +71,62 @@ struct GdfRecordData
     CharString              insValue;       // The value of the insertion. Empty if none.
     __int32                 delValue = 0;   // The value of the deletion. 0 if none.
     String<bool, Packed<> > coverage;
-    // DeltaType deltaType = Snp, Del, Ins, SV
-}
+    DeltaType               deltaType;
+};
 
 typedef String<GdfRecordData> GdfRecord;
 
-// ----------------------------------------------------------------------------
-// Class GdfRefInfo
-// ----------------------------------------------------------------------------
-
-struct GdfRefInfo
-{
-    unsigned    _refHash;
-    CharString  _refId;
-    CharString  _refFile;
-    bool        _storeRef;
-
-    GdfRefInfo() : _refHash(0), _storeRef(false)
-    {}
-};
-
-// ----------------------------------------------------------------------------
-// GdfFileInfo
-// ----------------------------------------------------------------------------
-
-template <typename TConfig = void>
-struct GdfFileInfo
-{
-    unsigned    _minorFileId;
-    unsigned    _majorFileId;
-    unsigned    _blockSize;
-    bool        _byteOrder; // true = little endian; false = big endian.
-    bool        _snpCompression;  // true if 2 bit alphabet used.
-
-    GdfFileInfo() : _minorFileId(GdfIO::FILE_VERSION_LITTLE),
-                    _majorFileId(GdfIO::FILE_VERSION_BIG),
-                    _blockSize(GdfFileBlockSize_<TConfig>::VALUE),
-                    _byteOrder(SystemByteOrder::IS_LITTLE_ENDIAN()),
-                    _snpCompression(false)
-    {}
-};
+//// ----------------------------------------------------------------------------
+//// Class GdfRefInfo
+//// ----------------------------------------------------------------------------
+//
+//struct GdfRefInfo
+//{
+//    unsigned    _refHash;
+//    CharString  _refId;
+//    CharString  _refFile;
+//    bool        _storeRef;
+//
+//    GdfRefInfo() : _refHash(0), _storeRef(false)
+//    {}
+//};
+//
+//// ----------------------------------------------------------------------------
+//// GdfFileInfo
+//// ----------------------------------------------------------------------------
+//
+//template <typename TConfig = void>
+//struct GdfFileInfo
+//{
+//    unsigned    _minorFileId;
+//    unsigned    _majorFileId;
+//    unsigned    _blockSize;
+//    bool        _byteOrder; // true = little endian; false = big endian.
+//    bool        _snpCompression;  // true if 2 bit alphabet used.
+//
+//    GdfFileInfo() : _minorFileId(GdfIO::FILE_VERSION_LITTLE),
+//                    _majorFileId(GdfIO::FILE_VERSION_BIG),
+//                    _blockSize(GdfFileBlockSize_<TConfig>::VALUE),
+//                    _byteOrder(SystemByteOrder::IS_LITTLE_ENDIAN()),
+//                    _snpCompression(false)
+//    {}
+//};
 
 // ----------------------------------------------------------------------------
 // Class GdfHeader
 // ----------------------------------------------------------------------------
 
-template <typename TConfig = void>
-class GdfHeader
-{
-public:
-    String<CharString>*   _nameStorePtr;  // The names of the individuals.
-    GdfFileInfo<TConfig>  _fileInfos;
-    GdfRefInfo            _refInfos;
-
-    GdfHeader() : _nameStorePtr(0), _fileInfos(), _refInfos()
-    {}
-};
+//template <typename TConfig = void>
+//class GdfHeader
+//{
+//public:
+//    String<CharString>*   _nameStorePtr;  // The names of the individuals.
+//    GdfFileInfo<TConfig>  _fileInfos;
+//    GdfRefInfo            _refInfos;
+//
+//    GdfHeader() : _nameStorePtr(0), _fileInfos(), _refInfos()
+//    {}
+//};
 
 // ============================================================================
 // Metafunctions
@@ -135,6 +135,24 @@ public:
 // ============================================================================
 // Functions
 // ============================================================================
+
+inline void
+clear(GdfHeaderRecord & me)
+{
+    clear(me.value);
+    clear(me.key);
+}
+
+inline void
+clear(GdfRecordData & me)
+{
+    me.contigId = 0;       // The contig id of this delta.
+    me.contigPos = 0;      // The position within the contig.
+    me.insValue = 0;       // The value of the insertion. Empty if none.
+    me.delValue = 0;   // The value of the deletion. 0 if none.
+    clear(me.coverage);
+}
+
 }
 
 #endif // INCLUDE_SEQAN_JOURNALED_STRING_TREE_DELTA_MAP_IO_HEADER_H_
