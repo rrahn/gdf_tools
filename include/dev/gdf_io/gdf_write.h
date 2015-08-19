@@ -202,7 +202,7 @@ inline int _writeDataBlock(TTarget & target,
                            TSnpCompressionStrategy const & /*compStrategy*/)
 {
     CharString blockBuffer;
-    typename Iterator<CharString>::Type blockBuffIt;
+//    typename Iterator<CharString>::Type blockBuffIt;
     __uint32 lastRefPos = itBegin->contigPos;
     // Write the reference offset of the current block.
     appendRawPod(target, lastRefPos);

@@ -87,11 +87,11 @@ typedef FormattedFile<Gdf, Output>  GdfFileOut;
 template <typename T>
 struct MagicHeader<Gdf, T>
 {
-    static unsigned char const VALUE[4];
+    static const char VALUE[4];
 };
 
 template <typename T>
-unsigned char const MagicHeader<Gdf, T>::VALUE[4] =
+const char MagicHeader<Gdf, T>::VALUE[4] =
 {
     '#', 'G', 'D', 'F'  // GDF's magic header
 };
@@ -151,9 +151,10 @@ struct FileFormat<FormattedFile<Gdf, TDirection, TSpec> >
 
 template <typename TSpec>
 inline void
-readHeader(GdfHeader & header, FormattedFile<Gdf, Input, TSpec> & file)
+readHeader(GdfHeader & header,
+           FormattedFile<Gdf, Input, TSpec> & file)
 {
-    readHeader(header, context(file), file.iter, file.format);
+    readHeader(header, context(file), file.iter, Gdf());
 }
 
 // ----------------------------------------------------------------------------
@@ -165,7 +166,7 @@ template <typename TSpec>
 inline void
 readRecord(GdfRecord & record, FormattedFile<Gdf, Input, TSpec> & file)
 {
-    readRecord(record, context(file), file.iter, file.format);
+    readRecord(record, context(file), file.iter, Gdf());
 }
 
 // ----------------------------------------------------------------------------
@@ -176,7 +177,7 @@ template <typename TSpec>
 inline void
 writeHeader(FormattedFile<Gdf, Output, TSpec> & file, GdfHeader & header)
 {
-    writeHeader(file.iter, header, context(file), file.format);
+    writeHeader(file.iter, header, context(file), Gdf());
 }
 
 // ----------------------------------------------------------------------------
@@ -187,7 +188,7 @@ template <typename TSpec>
 inline void
 writeRecord(FormattedFile<Gdf, Output, TSpec> & file, GdfRecord & record)
 {
-    writeRecord(file.iter, record, context(file), file.format);
+    writeRecord(file.iter, record, context(file), Gdf());
 }
 
 }

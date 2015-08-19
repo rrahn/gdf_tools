@@ -55,7 +55,8 @@ struct SnpCompStrategyRaw_;
 typedef Tag<SnpCompStrategyRaw_> SnpCompStrategyRaw;
 
 typedef TagList<SnpCompStrategy2BitEncoding,
-        TagList<SnpCompStrategyRaw> > SnpCompStrategies;
+        TagList<SnpCompStrategyRaw
+        > > SnpCompStrategies;
 
 typedef TagSelector<SnpCompStrategies> SnpCompStrategieSelector;
 

@@ -152,7 +152,7 @@ _setupAndParseArguments(ConverterOptions & options,
                            "reference sequence and a bit vector for each variant to be mask the sequences "
                            "that share this variant.");
 
-    addArgument(parser, ArgParseArgument(ArgParseArgument::OUTPUTFILE, "GDF-FILE"));
+    addArgument(parser, ArgParseArgument(ArgParseArgument::OUTPUT_FILE, "GDF-FILE"));
 
     addSection(parser, "General Options");
     addOption(parser, seqan::ArgParseOption("q", "quiet", "Set verbosity to a minimum."));
@@ -163,10 +163,10 @@ _setupAndParseArguments(ConverterOptions & options,
 //    setValidValues(parser, "gdf-file", "gdf");
 
     addSection(parser, "VCF Conversion");
-    addOption(parser, ArgParseOption("vcf", "vcf-file", "Vcf file to be converted.", ArgParseArgument::INPUTFILE));
+    addOption(parser, ArgParseOption("vcf", "vcf-file", "Vcf file to be converted.", ArgParseArgument::INPUT_FILE));
     setValidValues(parser, "vcf-file", "vcf");
 
-    addOption(parser, seqan::ArgParseOption("r", "vcf-reference", "Fasta file of the reference sequences.", ArgParseArgument::INPUTFILE));
+    addOption(parser, seqan::ArgParseOption("r", "vcf-reference", "Fasta file of the reference sequences.", ArgParseArgument::INPUT_FILE));
     setValidValues(parser, "vcf-reference", "fa fasta");
 
 //    addOption(parser, ArgParseOption("", "include-reference", "Includes the reference within the gdf file."));
@@ -189,10 +189,10 @@ _setupAndParseArguments(ConverterOptions & options,
 
 //    addOption(parser, ArgParseOption("", "suppress-sv", "Suppresses conversion of structural variants."));
 
-    addSection(parser, "Selftest");
-    addOption(parser, ArgParseOption("", "selftest", "Enables selftest mode."));
-    addOption(parser, ArgParseOption("cf", "compare-file", "File containing the fasta sequences constructed from the vcf.", ArgParseArgument::INPUTFILE));
-    setValidValues(parser, "cf", "fa fasta");
+//    addSection(parser, "Selftest");
+//    addOption(parser, ArgParseOption("", "selftest", "Enables selftest mode."));
+//    addOption(parser, ArgParseOption("cf", "compare-file", "File containing the fasta sequences constructed from the vcf.", ArgParseArgument::INPUT_FILE));
+//    setValidValues(parser, "cf", "fa fasta");
 
     // Add Examples Section.
 //    addTextSection(parser, "Examples");

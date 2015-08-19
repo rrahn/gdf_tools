@@ -149,53 +149,53 @@ inline bool _runSelftest(ConverterOptions const & options, TRefAlphabet /*ref*/,
     }
 
     bool result = true;
-    unsigned counter = 0;
-    while (!atEnd(compFile))
-    {
-        CharString seqId;
-        TReference seq;
-        try
-        {
-            readRecord(seqId, seq, compFile
-        }
-        catch
-        {
-            std::cerr << "[LOG] Error while reading  " << options.compareFile << "!\n[LOG] Abort ..." << std::endl;
-            return false;
-        }
-
-        if (seqId != sampleNames(context(gdfFile))[counter])
-        {
-            std::cerr << "[LOG] Sequence Ids don't match. Gdf-ID at [" << counter << "]: " << sampleNames(context(gdfFile))[counter] << " and Fasta-ID: " << seqId << "!" << std::endl;
-            result = false;
-        }
-        if (seq != stringSet(jst)[counter])
-        {
-            std::cerr << "[LOG] Sequences don't match. Gdf-seq at [" << counter << "]: " << stringSet(jst)[counter] << " and Fasta-seq: " << seq << "!" << std::endl;
-//            for (unsigned i = 0; i < _min(length(stringSet(jst)[counter]), length(seq)); ++i)
-//            {
-//                if (stringSet(jst)[counter][i] != seq[i])
-//                {
-//                    std::cerr << "[LOG] Seq ID = " << seqId << std::endl;
-//                    std::cerr << "[LOG] Mismatch at " << i << ": " << stringSet(jst)[counter][i] << " != " << seq[i] << std::endl;
-//                    std::cerr << "[LOG] hostPos = " << virtualToHostPosition((stringSet(jst)[counter])._journalEntries, i) << std::endl;
-//                    std::cerr << "[LOG] entry = " << *findInJournalEntries((stringSet(jst)[counter])._journalEntries, i) << std::endl;
-//                    std::cerr << "//______COMPARE_____________________________________________" << std::endl;
-//                    std::cerr << "[LOG] hostPos = " << virtualToHostPosition((stringSet(jst)[counter])._journalEntries, i - 1) << std::endl;
-//                    std::cerr << "[LOG] entry = " << *findInJournalEntries((stringSet(jst)[counter])._journalEntries, i - 1) << std::endl;
-//                    std::cerr << "//______COMPARE_____________________________________________" << std::endl;
-//                    std::cerr << "[LOG]                        Pos: " << "..|....|...*|....|...." << std::endl;
-//                    std::cerr << "[LOG] infix(jrn, 185923, 185945): " << infix(stringSet(jst)[counter], 185923, 185945) << std::endl;
-//                    std::cerr << "[LOG] infix(seq, 185923, 185945): " << infix(seq, 185923, 185945) << std::endl;
-//                    std::cerr << "[LOG] infix(ref, 185734, 185756): " << infix(ref, 185755, 185766) << infix(ref, 186597, 186608) << std::endl;
+//    unsigned counter = 0;
+//    while (!atEnd(compFile))
+//    {
+//        CharString seqId;
+//        TReference seq;
+//        try
+//        {
+//            readRecord(seqId, seq, compFile);
+//        }
+//        catch
+//        {
+//            std::cerr << "[LOG] Error while reading  " << options.compareFile << "!\n[LOG] Abort ..." << std::endl;
+//            return false;
+//        }
 //
-//                    break;
-//                }
-//            }
-            result = false;
-        }
-        ++counter;
-    }
+//        if (seqId != sampleNames(context(gdfFile))[counter])
+//        {
+//            std::cerr << "[LOG] Sequence Ids don't match. Gdf-ID at [" << counter << "]: " << sampleNames(context(gdfFile))[counter] << " and Fasta-ID: " << seqId << "!" << std::endl;
+//            result = false;
+//        }
+//        if (seq != stringSet(jst)[counter])
+//        {
+//            std::cerr << "[LOG] Sequences don't match. Gdf-seq at [" << counter << "]: " << stringSet(jst)[counter] << " and Fasta-seq: " << seq << "!" << std::endl;
+////            for (unsigned i = 0; i < _min(length(stringSet(jst)[counter]), length(seq)); ++i)
+////            {
+////                if (stringSet(jst)[counter][i] != seq[i])
+////                {
+////                    std::cerr << "[LOG] Seq ID = " << seqId << std::endl;
+////                    std::cerr << "[LOG] Mismatch at " << i << ": " << stringSet(jst)[counter][i] << " != " << seq[i] << std::endl;
+////                    std::cerr << "[LOG] hostPos = " << virtualToHostPosition((stringSet(jst)[counter])._journalEntries, i) << std::endl;
+////                    std::cerr << "[LOG] entry = " << *findInJournalEntries((stringSet(jst)[counter])._journalEntries, i) << std::endl;
+////                    std::cerr << "//______COMPARE_____________________________________________" << std::endl;
+////                    std::cerr << "[LOG] hostPos = " << virtualToHostPosition((stringSet(jst)[counter])._journalEntries, i - 1) << std::endl;
+////                    std::cerr << "[LOG] entry = " << *findInJournalEntries((stringSet(jst)[counter])._journalEntries, i - 1) << std::endl;
+////                    std::cerr << "//______COMPARE_____________________________________________" << std::endl;
+////                    std::cerr << "[LOG]                        Pos: " << "..|....|...*|....|...." << std::endl;
+////                    std::cerr << "[LOG] infix(jrn, 185923, 185945): " << infix(stringSet(jst)[counter], 185923, 185945) << std::endl;
+////                    std::cerr << "[LOG] infix(seq, 185923, 185945): " << infix(seq, 185923, 185945) << std::endl;
+////                    std::cerr << "[LOG] infix(ref, 185734, 185756): " << infix(ref, 185755, 185766) << infix(ref, 186597, 186608) << std::endl;
+////
+////                    break;
+////                }
+////            }
+//            result = false;
+//        }
+//        ++counter;
+//    }
     return result;
 }
 

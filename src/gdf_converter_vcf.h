@@ -83,7 +83,6 @@ struct VcfRecordTranslator<JournaledStringTree<TSequence, TConfig, TSpec> >
     VcfRecordTranslator(TJst & jst) : _jst(jst)
     {}
 
-    template <typename TVariantSet>
     inline void operator()(BasicDeltaValue const & basicDelta, bool force = false)
     {
         if (!force && empty(basicDelta.coverage))
@@ -145,7 +144,7 @@ inline void _resolveConflicts(JournaledStringTree<TSequence, TConfig, TSpec> & j
     typedef typename DeltaValue<TDeltaMap, DeltaTypeIns>::Type TIns;
     typedef typename DeltaValue<TDeltaMap, DeltaTypeSV>::Type TSV;
 
-    TDeltaMap& deltaMap = member(jst, JstDeltaMapMember());
+    TDeltaMap& deltaMap = impl::member(jst, JstDeltaMapMember());
     TStoreIter itBegin = begin(deltaMap, Standard());
     TStoreIter it = itBegin;
     TStoreIter itEnd = end(deltaMap, Standard());
@@ -153,20 +152,20 @@ inline void _resolveConflicts(JournaledStringTree<TSequence, TConfig, TSpec> & j
     {
         if (deltaType(it) == DELTA_TYPE_DEL)
         {  // Resolve all variants that intersect with a deleted region.
-            TPosition endPoint = deltaValue(it, DeltaTypeDel()) + deltaPosition(it);
+            TPosition endPoint = deltaValue(it, DeltaTypeDel()) + getDeltaPosition(*it);
             // Move to the begin of the affected range.
             TStoreIter itLocal = it;
-            while (itLocal != begin(deltaMap, Standard()) && deltaPosition(--itLocal) == deltaPosition(it))
+            while (itLocal != begin(deltaMap, Standard()) && getDeltaPosition(*(--itLocal)) == getDeltaPosition(*it))
             {}
 
-            if (deltaPosition(itLocal) != deltaPosition(it))  // Move one up to begin of range.
+            if (getDeltaPosition(*itLocal) != getDeltaPosition(*it))  // Move one up to begin of range.
                 ++itLocal;
 
             // Resolve the conflicts.
-            while (itLocal != end(deltaMap, Standard()) && deltaPosition(itLocal) < endPoint)
+            while (itLocal != end(deltaMap, Standard()) && getDeltaPosition(*itLocal) < endPoint)
             {
                 if (itLocal != it)
-                    transform(deltaCoverage(itLocal), deltaCoverage(itLocal), deltaCoverage(it),
+                    transform(getDeltaCoverage(*itLocal), getDeltaCoverage(*itLocal), getDeltaCoverage(*it),
                               FunctorNested<FunctorBitwiseAnd, FunctorIdentity, FunctorBitwiseNot>());
                 ++itLocal;
             }
@@ -174,19 +173,19 @@ inline void _resolveConflicts(JournaledStringTree<TSequence, TConfig, TSpec> & j
         if (deltaType(it) == DELTA_TYPE_INS)
         {  // Resolve all insertions that occur immediately before an replacement or deletion.
             TStoreIter itLocal = it + 1;
-            while (deltaPosition(itLocal) == deltaPosition(it))
+            while (getDeltaPosition(*itLocal) == getDeltaPosition(*it))
             {
 //                TMappedDelta deltaInfoInner = mappedDelta(deltaMap, itLocal - itBegin);
                 if (deltaType(itLocal) == DELTA_TYPE_DEL || deltaType(itLocal) == DELTA_TYPE_SNP)
                 {
                     TBitVector tmpVec;
-                    transform(tmpVec, deltaCoverage(it), deltaCoverage(itLocal), FunctorBitwiseAnd());
+                    transform(tmpVec, getDeltaCoverage(*it), getDeltaCoverage(*itLocal), FunctorBitwiseAnd());
                     if (!testAllZeros(tmpVec))  // At least one sequence contains an ambiguous variant.
                     {  // TODO(rrahn): Check if all variants are reset.
                         // Update the coverage of the nodes.
-                        transform(deltaCoverage(it), deltaCoverage(it), tmpVec,
+                        transform(getDeltaCoverage(*it), getDeltaCoverage(*it), tmpVec,
                                   FunctorNested<FunctorBitwiseAnd, FunctorIdentity, FunctorBitwiseNot>());
-                        transform(deltaCoverage(itLocal), deltaCoverage(itLocal), tmpVec,
+                        transform(getDeltaCoverage(*itLocal), getDeltaCoverage(*itLocal), tmpVec,
                                   FunctorNested<FunctorBitwiseAnd, FunctorIdentity, FunctorBitwiseNot>());
 
                         if (deltaType(itLocal) == DELTA_TYPE_DEL)
@@ -204,7 +203,7 @@ inline void _resolveConflicts(JournaledStringTree<TSequence, TConfig, TSpec> & j
                         // Insert the new coverage and variant info into the variant store.
                         TPosition currPos = it - begin(deltaMap, Standard());
                         insertValue(deltaMap._entries, currPos,
-                                    TDeltaEntry(deltaPosition(it), TDeltaRecord(DELTA_TYPE_SV,
+                                    TDeltaEntry(getDeltaPosition(*it), TDeltaRecord(DELTA_TYPE_SV,
                                                 length(getDeltaStore(deltaMap._deltaStore, DeltaTypeSV())) - 1),
                                                 tmpVec));
 //                        insertValue(deltaMap._deltaCoverageStore._coverageData, currPos, tmpVec);
@@ -370,7 +369,7 @@ extractGenotypeInfos(VcfRecord const & record, StringSet<CharString> const & alt
                     break;
                 }
 
-                SEQAN_ASSERT_EQ(length(buffer), 1);
+                SEQAN_ASSERT_EQ(length(buffer), 1u);
 
                 if (buffer == ".")  // ignore unknown fields.
                     appendValue(altIds, -1);
@@ -380,7 +379,7 @@ extractGenotypeInfos(VcfRecord const & record, StringSet<CharString> const & alt
             } while (allelIt != end(front(genotypeField)));
 
             auto ploidy = length(altIds);
-            decltype(ploidy) haplotypeNum = 0;
+//            decltype(ploidy) haplotypeNum = 0;
 
             for (decltype(ploidy) htNum = 0; htNum < length(altIds); ++htNum)
             {
@@ -778,7 +777,8 @@ int _convertVcfToGdf(GdfFileOut & gdfOut,
 
     // It would be nice to have such a file.
 
-    save(jst, gdfOut);  // Write save function. Export this later to develop.
+
+//    save(jst, gdfOut);  // Write save function. Export this later to develop.
 
     if (options.verbosity > 1)
     {
@@ -853,7 +853,8 @@ int adaptVcfToJournalData(ConverterOptions const & options,
 
     // Add reference as file to the set of sequences.
     if (options.includeReference)
-        appendValue(context(gdfOut), context(gdfOut).refID);  // Last one.
+        appendValue(sampleNames(context(gdfOut)), context(gdfOut).refID);  // Last one.
+    refresh(sampleNamesCache(context(gdfOut)));
 
     _convertVcfToGdf(gdfOut, reference, vcfFile, options, TRefAlphabet(), TVarAlphabet());
 

@@ -68,7 +68,7 @@ _parseGdfSamples(GdfIOContext<TNameStore, TNameStoreCache, TStorageSpec> & conte
         throw ParseError("Could not determine sample names!");
 
     for (auto& sampleName : samples)
-        nameToId(nameStoreCache(context), sampleName);
+        nameToId(sampleNamesCache(context), sampleName);
 }
 
 // ----------------------------------------------------------------------------
@@ -90,7 +90,8 @@ readHeader(GdfHeader & header,
     skipOne(iter);
     if (*iter > GDF_VERSION_MINOR)
         throw ParseError("Incompatible minor version number!");
-    skipNChars(iter, 2);
+    skipOne(iter);
+    skipOne(iter);
 
     clear(buffer);
     readLine(buffer, iter);
@@ -259,9 +260,9 @@ _extractDataBlock(GdfRecord & record,
 
 template <typename TBuffer>
 inline void
-_extractDataBlock(GdfRecord const & /*record*/,
-                  TBuffer const & /*buffer*/,
-                  TagSelector<> const & /*format*/)
+_extractDataBlock(GdfRecord & /*record*/,
+                  TBuffer & /*buffer*/,
+                  TagSelector<> & /*format*/)
 {
     throw ParseError("GdfFileIn: Could not determine correct snp compression strategy!");
 }
@@ -270,14 +271,14 @@ template <typename TBuffer, typename TTagList>
 inline void
 _extractDataBlock(GdfRecord & record,
                   TBuffer & buffer,
-                  TagSelector<TTagList> const & format)
+                  TagSelector<TTagList> & format)
 {
     typedef typename TTagList::Type TFormat;
 
     if (isEqual(format, TFormat()))
         _extractDataBlock(record, buffer, TFormat());
     else
-        _extractDataBlock(record, buffer, static_cast<typename TagSelector<TTagList>::Base const &>(format));
+        _extractDataBlock(record, buffer, static_cast<typename TagSelector<TTagList>::Base &>(format));
 }
 
 // ----------------------------------------------------------------------------
